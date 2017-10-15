@@ -2,7 +2,6 @@
 #include "stdafx.h"
 #include <stdio.h>
 #include <Psapi.h>
-
 extern HINSTANCE hAppInstance;
 
 
@@ -11,10 +10,7 @@ extern HINSTANCE hAppInstance;
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 {
 	char buffer[MAX_PATH];
-	HMODULE hMods[1024] = { 0 };
-	DWORD cbNeeded = 0;
-	BOOL bReturnValue = TRUE;
-	TCHAR szModName[MAX_PATH];
+	CONTEXT ctx;
 
 	switch (dwReason)
 	{
@@ -26,19 +22,26 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 
 		hAppInstance = hinstDLL;
 		NtContinue fnNtContinue;
-		fnNtContinue = (NtContinue)(*(uintptr_t*)(0x55550000));
+		DWORD oldProt;
+		
 		/* Cleanup */
-		VirtualProtectEx(GetCurrentProcess(), fnNtContinue, 6, PAGE_EXECUTE_READ, 0);
+		fnNtContinue = (NtContinue)(*(uintptr_t*)(0x55550000));
+		VirtualProtect(fnNtContinue, 8, PAGE_EXECUTE_READ, &oldProt);
 		VirtualFree((LPVOID)0x55550000, 0, MEM_RELEASE);
 		VirtualFree((LPVOID)0x55560000, 0, MEM_RELEASE);
+		/*End of Cleanup*/
 
 		AllocConsole();
-
 		freopen("CONOUT$", "w", stdout);
 		GetModuleFileNameA(0, buffer, MAX_PATH);
-
 		printf("Mapped inside %s\n", buffer);
-
+		ctx = *(PCONTEXT)lpReserved;
+#ifdef _WIN64
+		printf("Going to Rip : %p\n", ctx.Rip);
+#else
+		printf("Going to Eip : %p\n", ctx.Eip);
+#endif
+		//Go to hijacked process EP
 		fnNtContinue((PCONTEXT)lpReserved, false);
 
 		break;
@@ -47,5 +50,5 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 	case DLL_THREAD_DETACH:
 		break;
 	}
-	return bReturnValue;
+	return 1;
 }
